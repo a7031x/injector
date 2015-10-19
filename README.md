@@ -1,4 +1,4 @@
-If you are not familiar with Windows PE, you can download the PE specification here.
+If you are not familiar with Windows PE, you can download the PE specification <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/ms680547(v=vs.85).aspx">here</a>.
 
 This tool is like the way a virus infects a PE file. It expands the last section of the PE, then writes a snippet of code which loads an external DLL, then jumps back to the original entry point of the program.
 
