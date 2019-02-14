@@ -284,7 +284,7 @@ private:
 			x64code(shellBase, 0x59);//pop rcx
 			makeCallRelative((size_t)getModuleHandle);
 			makePushRelative((size_t)virtualProtectString + imageOffset);
-			*shellBase++ = 0x50;	//push eax
+			*shellBase++ = 0x50;	//push eax=GetModuleHandleA
 			makePushRelative((size_t)loadLibraryString + imageOffset);
 			*shellBase++ = 0x50;	//push eax
 			x64code(shellBase, 0x59);//pop rcx
@@ -292,7 +292,7 @@ private:
 			makeCallDirect((size_t)shellBase + imageOffset, (size_t)procAddress + imageOffset);
 			makePushRelative((size_t)monitorString + imageOffset);
 			x64code(shellBase, 0x59);//pop rcx
-			makeCallEax();
+			makeCallEax();//LoadLibraryA("monitor.dll")
 		}
 		else if(0 != loadLibrary)
 		{
