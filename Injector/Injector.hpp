@@ -166,11 +166,19 @@ private:
 	}
 	class stack_frame_t {
 		char*& _shell;
+		size_t _size;
 	public:
+		size_t size()const {
+			return _size;
+		}
 		stack_frame_t(char*& shell) : _shell(shell) {
+			//x64code(_shell, { 0x48, 0x81, 0xEC, 0x00, 0x01, 0x00, 0x00 });
+			//_size = 7;
 			x64code(_shell, { 0x48, 0x83, 0xEC, 0x78 });
+			_size = 4;
 		}
 		~stack_frame_t() {
+			//x64code(_shell, { 0x48, 0x81, 0xC4, 0x00, 0x01, 0x00, 0x00 });
 			x64code(_shell, { 0x48, 0x83, 0xC4, 0x78 });
 		}
 	};
@@ -258,7 +266,7 @@ private:
 			stack_frame_t x(shellBase);
 			*reinterpret_cast<unsigned char*>(shellBase++) = 0xE8;
 #ifdef _WIN64
-			from += 4;
+			from += x.size();
 #endif // _WIN64
 
 			*reinterpret_cast<uint32_t*>(shellBase) = address - from - 5;
