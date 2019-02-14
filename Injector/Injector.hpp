@@ -128,7 +128,6 @@ private:
 	static uint32_t idataItem(char* base, const char* name)
 	{
 		auto nt = ntHeader(base);
-
 		auto iat = &nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
 		auto section = findSection(base, iat->VirtualAddress);
 	//	auto rdata = sectionDirectory(base, section);	//iat is part of rdata
@@ -156,6 +155,20 @@ private:
 			++importDescriptor;
 		}
 		return 0;
+	}
+	static void x64prefix(char*& shellBase)
+	{
+		x64code(shellBase, 0x48);
+	}
+	static void x64csprefix(char*& shellBase)
+	{
+		x64code(shellBase, 0x2E);
+	}
+	static void x64code(char*& shellBase, unsigned char code)
+	{
+#ifdef _WIN64
+		*reinterpret_cast<unsigned char*>(shellBase++) = code;
+#endif // _WIN64
 	}
 	static void writeShell(char* base, const Extention& ext, const std::string& monitorName)
 	{
@@ -190,14 +203,18 @@ private:
 		auto virtualProtectString = writeString(shellBase, "VirtualProtect");
 		auto imageOffset = ext.sectionVirtualOffset + nt->OptionalHeader.ImageBase - size_t(base) - ext.extentionBase;
 
-		auto makePush = [&shellBase](uint32_t address)
+		auto makePush = [&shellBase](size_t address)
 		{
-			 *shellBase++ = 0x68;
-			 *reinterpret_cast<uint32_t*>(shellBase) = address;
-			 shellBase += 4;
+			x64prefix(shellBase);
+			*shellBase++ = 0xBB;
+			*reinterpret_cast<size_t*>(shellBase) = address;
+			shellBase += sizeof(size_t);
+			*shellBase++ = 0x53;
+
 		};
 		auto makePushRelative = [&shellBase](uint32_t address)
 		{
+			x64prefix(shellBase);
 			*reinterpret_cast<uint16_t*>(shellBase) = 0x9F8D;
 			*reinterpret_cast<uint32_t*>(shellBase + 2) = address;
 			shellBase += 6;
@@ -205,6 +222,7 @@ private:
 		};
 		auto makeCall = [&shellBase](uint32_t address)
 		{
+			x64csprefix(shellBase);
 			*reinterpret_cast<uint16_t*>(shellBase) = 0x15FF;
 			shellBase += 2;
 			*reinterpret_cast<uint32_t*>(shellBase) = address;
@@ -212,13 +230,15 @@ private:
 		};
 		auto makeCallRelative = [&shellBase](uint32_t address)
 		{
+			x64prefix(shellBase);
 			*reinterpret_cast<uint16_t*>(shellBase) = 0x9F8D;
 			*reinterpret_cast<uint32_t*>(shellBase + 2) = address;
 			shellBase += 6;
+			x64csprefix(shellBase);
 			*reinterpret_cast<uint16_t*>(shellBase) = 0x13FF;
 			shellBase += 2;
 		};
-		auto makeCallDirect = [&shellBase](uint32_t from, uint32_t address)
+		auto makeCallDirect = [&shellBase](size_t from, size_t address)
 		{
 			*reinterpret_cast<unsigned char*>(shellBase++) = 0xE8;
 			*reinterpret_cast<uint32_t*>(shellBase) = address - from - 5;
@@ -246,38 +266,49 @@ private:
 			*reinterpret_cast<unsigned char*>(shellBase++) = 0xE8;	//call $next
 			*reinterpret_cast<uint32_t*>(shellBase) = 0;
 			shellBase += 4;
-			*reinterpret_cast<unsigned char*>(shellBase++) = 0x5F;	//pop edi
+			*reinterpret_cast<unsigned char*>(shellBase++) = 0x5F;	//pop edi/rdi
+			x64prefix(shellBase);
 			*reinterpret_cast<uint16_t*>(shellBase) = 0xEF81;
-			*reinterpret_cast<uint32_t*>(shellBase + 2) = (uint32_t)shellBase + imageOffset - 1;
+#ifdef _WIN64
+			*reinterpret_cast<uint32_t*>(shellBase + 2) = (size_t)shellBase + imageOffset - 2;
+#else
+			*reinterpret_cast<uint32_t*>(shellBase + 2) = (size_t)shellBase + imageOffset - 1;
+#endif
 			shellBase += 6;
 		};
 		nt->OptionalHeader.AddressOfEntryPoint = (uint32_t)shellBase + imageOffset - nt->OptionalHeader.ImageBase;
 		makeOffset();
 		if(0 != getModuleHandle)
 		{
-			makePushRelative((uint32_t)kernel32String + imageOffset);
-			makeCallRelative((uint32_t)getModuleHandle);
-			makePushRelative((uint32_t)virtualProtectString + imageOffset);
+			makePushRelative((size_t)kernel32String + imageOffset);
+			x64code(shellBase, 0x59);//pop rcx
+			makeCallRelative((size_t)getModuleHandle);
+			makePushRelative((size_t)virtualProtectString + imageOffset);
 			*shellBase++ = 0x50;	//push eax
-			makePushRelative((uint32_t)loadLibraryString + imageOffset);
+			makePushRelative((size_t)loadLibraryString + imageOffset);
 			*shellBase++ = 0x50;	//push eax
-			makeCallDirect((uint32_t)shellBase + imageOffset, (uint32_t)procAddress + imageOffset);
-			makePushRelative((uint32_t)monitorString + imageOffset);
+			x64code(shellBase, 0x59);//pop rcx
+			x64code(shellBase, 0x5A);//pop rdx
+			makeCallDirect((size_t)shellBase + imageOffset, (size_t)procAddress + imageOffset);
+			makePushRelative((size_t)monitorString + imageOffset);
+			x64code(shellBase, 0x59);//pop rcx
 			makeCallEax();
 		}
 		else if(0 != loadLibrary)
 		{
-			makePushRelative((uint32_t)monitorString + imageOffset);
-			makeCallRelative((uint32_t)loadLibrary);
+			makePushRelative((size_t)monitorString + imageOffset);
+			x64code(shellBase, 0x59);//pop rcx
+			makeCallRelative((size_t)loadLibrary);
 		}
 		else
 		{
 			puts("No useful api.");
-
 			getchar();
 			ExitProcess(0);
 		}
-		makeCallDirect((uint32_t)shellBase + imageOffset, (uint32_t)procAddress + imageOffset);
+		x64code(shellBase, 0x59);//pop rcx
+		x64code(shellBase, 0x5A);//pop rdx
+		makeCallDirect((size_t)shellBase + imageOffset, (size_t)procAddress + imageOffset);
 		//makePush((uint32_t)oldProtect + imageOffset);
 		unsigned char espToEsp[] = {0x83, 0xEC, 0x04, 0x89, 0x24, 0x24};
 		memcpy(shellBase, espToEsp, sizeof(espToEsp));
@@ -310,8 +341,70 @@ private:
 		shellBase += (text.size() + 1) * sizeof(wchar_t);
 		return base;
 	}
+	__declspec(dllexport) static void* function_address(HINSTANCE dll, const char* name)
+	{
+		IMAGE_DOS_HEADER*			dos_header;
+		IMAGE_NT_HEADERS*			nt_header;
+		IMAGE_SECTION_HEADER*		section_header;
+		IMAGE_EXPORT_DIRECTORY*		exports;
+		IMAGE_DATA_DIRECTORY*		directory;
+		DWORD*						name_ref;
+		WORD*						ordinal;
+		long						k;
+		BYTE*						base;
+
+		base = const_cast<LPBYTE>(reinterpret_cast<const BYTE*>(dll));
+		dos_header = reinterpret_cast<IMAGE_DOS_HEADER*>(base);
+		nt_header = reinterpret_cast<IMAGE_NT_HEADERS*>(base + dos_header->e_lfanew);
+		section_header = reinterpret_cast<IMAGE_SECTION_HEADER*>(nt_header + 1);
+
+		directory = &nt_header->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT];
+		if (0 == directory->Size) return nullptr;
+
+		exports = reinterpret_cast<IMAGE_EXPORT_DIRECTORY*>(base + directory->VirtualAddress);
+		if (exports->NumberOfNames == 0 || exports->NumberOfFunctions == 0)
+			return nullptr;
+
+		name_ref = reinterpret_cast<DWORD*>(&base[exports->AddressOfNames]);
+		ordinal = reinterpret_cast<WORD*>(&base[exports->AddressOfNameOrdinals]);
+		for (k = 0; k < (long)exports->NumberOfNames; ++k, ++name_ref, ++ordinal)
+		{
+			auto s0 = reinterpret_cast<const char*>(&base[*name_ref]);
+			auto s1 = name;
+			while (*s0 && *s1 && *s0 == *s1) {
+				++s0;
+				++s1;
+			}
+			if(*s0 == 0 && *s1 == 0)
+				return base + *reinterpret_cast<DWORD*>(&base[exports->AddressOfFunctions + *ordinal * 4]);
+		}
+		return nullptr;
+	}
 	static std::vector<char> functionAddress()
 	{
+#ifdef _WIN64
+		unsigned char shellCode[] = {
+			0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x6c, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x48, 0x89,
+			0x7c, 0x24, 0x20, 0x48, 0x63, 0x41, 0x3c, 0x48, 0x8b, 0xea, 0x48, 0x8b, 0xd9, 0x83, 0xbc, 0x08, 0x8c,
+			0x00, 0x00, 0x00, 0x00, 0x0f, 0x84, 0x7c, 0x00, 0x00, 0x00, 0x8b, 0xbc, 0x08, 0x88, 0x00, 0x00, 0x00,
+			0x48, 0x03, 0xf9, 0x8b, 0x77, 0x18, 0x85, 0xf6, 0x74, 0x6b, 0x83, 0x7f, 0x14, 0x00, 0x74, 0x65, 0x44,
+			0x8b, 0x57, 0x20, 0x45, 0x33, 0xc9, 0x44, 0x8b, 0x5f, 0x24, 0x4c, 0x03, 0xd1, 0x4c, 0x03, 0xd9, 0x85,
+			0xf6, 0x7e, 0x50, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00, 0x41, 0x8b, 0x02, 0x48, 0x8b, 0xcd,
+			0x48, 0x03, 0xc3, 0x0f, 0xb6, 0x10, 0x84, 0xd2, 0x74, 0x23, 0x44, 0x0f, 0xb6, 0x01, 0x45, 0x84, 0xc0,
+			0x74, 0x15, 0x41, 0x3a, 0xd0, 0x75, 0x10, 0x0f, 0xb6, 0x50, 0x01, 0x48, 0xff, 0xc0, 0x48, 0xff, 0xc1,
+			0x84, 0xd2, 0x75, 0xe4, 0xeb, 0x05, 0x80, 0x38, 0x00, 0x75, 0x05, 0x80, 0x39, 0x00, 0x74, 0x27, 0x41,
+			0xff, 0xc1, 0x49, 0x83, 0xc2, 0x04, 0x49, 0x83, 0xc3, 0x02, 0x44, 0x3b, 0xce, 0x7c, 0xb8, 0x33, 0xc0,
+			0x48, 0x8b, 0x5c, 0x24, 0x08, 0x48, 0x8b, 0x6c, 0x24, 0x10, 0x48, 0x8b, 0x74, 0x24, 0x18, 0x48, 0x8b,
+			0x7c, 0x24, 0x20, 0xc3, 0x41, 0x0f, 0xb7, 0x0b, 0x8b, 0x47, 0x1c, 0x8d, 0x0c, 0x88, 0x8b, 0x04, 0x19,
+			0x48, 0x03, 0xc3, 0xeb, 0xd9, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc,
+			0xcc, 0xcc, 0xcc, 0x40, 0x53, 0x48, 0x83, 0xec, 0x20, 0x48, 0x8b, 0xd9, 0x48, 0x8b, 0x49, 0x18, 0x48,
+			0x85, 0xc9, 0x74, 0x3f, 0x48, 0x8b, 0x53, 0x28, 0x48, 0x2b, 0xd1, 0x48, 0x83, 0xe2, 0xf8, 0x48, 0x81,
+			0xfa, 0x00, 0x10, 0x00, 0x00, 0x72, 0x18, 0x4c, 0x8b, 0x41, 0xf8, 0x48, 0x83, 0xc2, 0x27, 0x49, 0x2b,
+			0xc8, 0x48, 0x8d, 0x41, 0xf8, 0x48, 0x83, 0xf8, 0x1f, 0x77, 0x1c, 0x49, 0x8b, 0xc8, 0xe8, 0x2d, 0xb1,
+			0x00, 0x00, 0x33, 0xc0, 0x48, 0x89, 0x43, 0x18, 0x48, 0x89, 0x43, 0x20, 0x48, 0x89, 0x43, 0x28, 0x48,
+			0x83, 0xc4, 0x20, 0x5b, 0xc3 
+		};
+#else
 		unsigned char shellCode[] = {
 				0x55, 0x8b, 0xec, 0x83, 0xec, 0x08, 0x53, 0x8b, 0x5d, 0x08, 0x8b, 0x43, 0x3c, 0x83, 0x7c, 0x18,
 				0x7c, 0x00, 0x75, 0x09, 0x33, 0xc0, 0x5b, 0x8b, 0xe5, 0x5d, 0xc2, 0x08, 0x00, 0x8b, 0x44, 0x18,
@@ -324,6 +417,7 @@ private:
 				0x00, 0x8b, 0x45, 0x08, 0x5f, 0x0f, 0xb7, 0x08, 0x8b, 0x45, 0xf8, 0x5e, 0x8b, 0x40, 0x1c, 0x8d,
 				0x04, 0x88, 0x8b, 0x04, 0x18, 0x03, 0xc3, 0x5b, 0x8b, 0xe5, 0x5d, 0xc2, 0x08, 0x00
 			};
+#endif
 		return std::vector<char>(shellCode, &shellCode[sizeof(shellCode)]);
 	}
 };

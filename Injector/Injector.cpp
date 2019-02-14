@@ -24,7 +24,6 @@ void copy_folder(const std::filesystem::path& source, const std::filesystem::pat
 
 int _tmain(int argc, _TCHAR* argv[])
 {
-
 	string sfileName;
 	getline(cin, sfileName);
 	sfileName.erase(std::remove(sfileName.begin(), sfileName.end(), '\"'), sfileName.end());
