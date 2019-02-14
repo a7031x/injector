@@ -1,0 +1,13 @@
+.vs
+Injector/Debug
+*.log
+*.obj
+*.pch
+*.tlog
+*.iobj
+*.ipdb
+*.ilk
+*.pdb
+*.exp
+*.idb
+*.suo

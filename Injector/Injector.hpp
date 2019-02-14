@@ -1,11 +1,10 @@
 #pragma once
 #include <Windows.h>
-#include <custom/fileutility.hpp>
+#include "fileutils.hpp"
 #include <filesystem>
 #include <ImageHlp.h>
 #pragma comment(lib,"Imagehlp.lib")
-using namespace std;
-using namespace std::tr2::sys;
+using namespace std::filesystem;
 
 inline bool ansiequal(const char* p1, const char* p2)
 {
@@ -29,12 +28,12 @@ private:
 		uint32_t	imageExtentionBase;
 		uint32_t	virtualExtentionSize;
 		int32_t		sectionVirtualOffset;
-		vector<pair<uint32_t, uint32_t>> recovery;
+		std::vector<std::pair<uint32_t, uint32_t>> recovery;
 	};
 public:
-	static bool inject(const path& p, const string& monitorName)
+	static bool inject(const path& p, const std::string& monitorName)
 	{
-		auto file = FileUtilityReadFile(p.string());
+		auto file = fileutils::readfile(p);
 		if(0x400 > file.size()) return false;
 		auto base = file.data();
 		auto ext = extendCodeSection(base);
@@ -48,7 +47,7 @@ public:
 		auto orgPath = p;
 		orgPath.replace_extension(".org" + orgPath.extension().string());
 		copy_file(p, orgPath, copy_options::overwrite_existing);
-		fileutility::write_file(p.string(), file);
+		fileutils::writefile(p.string(), file);
 		return true;
 	}
 private:
@@ -107,7 +106,7 @@ private:
 		auto pushRecovery = [base, &ext](const void* address)
 		{
 			auto offset = uint32_t(reinterpret_cast<const char*>(address) - base);
-			ext.recovery.push_back(pair<uint32_t, uint32_t>(offset, *reinterpret_cast<const uint32_t*>(address)));
+			ext.recovery.push_back(std::pair<uint32_t, uint32_t>(offset, *reinterpret_cast<const uint32_t*>(address)));
 		};
 		auto directory = sectionDirectory(base, section);
 		if(nullptr != directory)
@@ -133,7 +132,7 @@ private:
 		auto iat = &nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
 		auto section = findSection(base, iat->VirtualAddress);
 	//	auto rdata = sectionDirectory(base, section);	//iat is part of rdata
-		auto virtualToRawOffset = section->PointerToRawData - section->VirtualAddress;
+		auto virtualToRawOffset = int(section->PointerToRawData - section->VirtualAddress);
 		auto offset = iat->VirtualAddress + virtualToRawOffset;
 		auto importDescriptor = reinterpret_cast<IMAGE_IMPORT_DESCRIPTOR*>(&base[offset]);
 		while(importDescriptor->TimeDateStamp || importDescriptor->FirstThunk || importDescriptor->Name || importDescriptor->OriginalFirstThunk || importDescriptor->ForwarderChain)
@@ -158,7 +157,7 @@ private:
 		}
 		return 0;
 	}
-	static void writeShell(char* base, const Extention& ext, const string& monitorName)
+	static void writeShell(char* base, const Extention& ext, const std::string& monitorName)
 	{
 		auto nt = ntHeader(base);
 		auto shellBase = base + ext.extentionBase;
@@ -183,7 +182,7 @@ private:
 		if(0 == loadLibrary && 0 == getModuleHandle)
 		{
 			loadLibrary = idataItem(base, "LoadLibraryW");
-			monitorString = writeString(shellBase, codepage::acp_to_unicode(monitorName));
+			monitorString = writeString(shellBase, std::wstring(monitorName.begin(), monitorName.end()));
 		}
 		else
 			monitorString = writeString(shellBase, monitorName);
@@ -221,7 +220,7 @@ private:
 		};
 		auto makeCallDirect = [&shellBase](uint32_t from, uint32_t address)
 		{
-			*reinterpret_cast<byte*>(shellBase++) = 0xE8;
+			*reinterpret_cast<unsigned char*>(shellBase++) = 0xE8;
 			*reinterpret_cast<uint32_t*>(shellBase) = address - from - 5;
 			shellBase += 4;
 		};
@@ -232,7 +231,7 @@ private:
 		};
 		auto makeMoveDwordEax = [&shellBase](uint32_t address)
 		{
-			*reinterpret_cast<byte*>(shellBase++) = 0xA3;
+			*reinterpret_cast<unsigned char*>(shellBase++) = 0xA3;
 			*reinterpret_cast<uint32_t*>(shellBase) = address;
 			shellBase += 4;
 		};
@@ -244,10 +243,10 @@ private:
 		};
 		auto makeOffset = [&shellBase,imageOffset]
 		{
-			*reinterpret_cast<byte*>(shellBase++) = 0xE8;	//call $next
+			*reinterpret_cast<unsigned char*>(shellBase++) = 0xE8;	//call $next
 			*reinterpret_cast<uint32_t*>(shellBase) = 0;
 			shellBase += 4;
-			*reinterpret_cast<byte*>(shellBase++) = 0x5F;	//pop edi
+			*reinterpret_cast<unsigned char*>(shellBase++) = 0x5F;	//pop edi
 			*reinterpret_cast<uint16_t*>(shellBase) = 0xEF81;
 			*reinterpret_cast<uint32_t*>(shellBase + 2) = (uint32_t)shellBase + imageOffset - 1;
 			shellBase += 6;
@@ -280,7 +279,7 @@ private:
 		}
 		makeCallDirect((uint32_t)shellBase + imageOffset, (uint32_t)procAddress + imageOffset);
 		//makePush((uint32_t)oldProtect + imageOffset);
-		byte espToEsp[] = {0x83, 0xEC, 0x04, 0x89, 0x24, 0x24};
+		unsigned char espToEsp[] = {0x83, 0xEC, 0x04, 0x89, 0x24, 0x24};
 		memcpy(shellBase, espToEsp, sizeof(espToEsp));
 		shellBase += sizeof(espToEsp);
 		makePush(PAGE_READWRITE);
@@ -289,31 +288,31 @@ private:
 		makeCallEax();
 		for(auto& rec : ext.recovery)
 		{
-			*reinterpret_cast<byte*>(shellBase++) = 0xB8;	//mov ecx, dddd
+			*reinterpret_cast<unsigned char*>(shellBase++) = 0xB8;	//mov ecx, dddd
 			*reinterpret_cast<uint32_t*>(shellBase) = rec.second;
 			shellBase += 4;
 			makeMoveDwordEaxRelative(rec.first + nt->OptionalHeader.ImageBase);
 		}
 		makePush(ext.OEP + nt->OptionalHeader.ImageBase);
-		*reinterpret_cast<byte*>(shellBase++) = 0xC3;	//retn
+		*reinterpret_cast<unsigned char*>(shellBase++) = 0xC3;	//retn
 	}
-	static char* writeString(char*& shellBase, const string& text)
+	static char* writeString(char*& shellBase, const std::string& text)
 	{
 		memcpy(shellBase, text.data(), text.size() + 1);
 		auto base = shellBase;
 		shellBase += text.size() + 1;
 		return base;
 	}
-	static char* writeString(char*& shellBase, const wstring& text)
+	static char* writeString(char*& shellBase, const std::wstring& text)
 	{
 		memcpy(shellBase, text.data(), (text.size() + 1) * sizeof(wchar_t));
 		auto base = shellBase;
 		shellBase += (text.size() + 1) * sizeof(wchar_t);
 		return base;
 	}
-	static vector<char> functionAddress()
+	static std::vector<char> functionAddress()
 	{
-		byte shellCode[] = {
+		unsigned char shellCode[] = {
 				0x55, 0x8b, 0xec, 0x83, 0xec, 0x08, 0x53, 0x8b, 0x5d, 0x08, 0x8b, 0x43, 0x3c, 0x83, 0x7c, 0x18,
 				0x7c, 0x00, 0x75, 0x09, 0x33, 0xc0, 0x5b, 0x8b, 0xe5, 0x5d, 0xc2, 0x08, 0x00, 0x8b, 0x44, 0x18,
 				0x78, 0x03, 0xc3, 0x89, 0x45, 0xf8, 0x8b, 0x48, 0x18, 0x89, 0x4d, 0xfc, 0x85, 0xc9, 0x74, 0xe4,
@@ -325,6 +324,6 @@ private:
 				0x00, 0x8b, 0x45, 0x08, 0x5f, 0x0f, 0xb7, 0x08, 0x8b, 0x45, 0xf8, 0x5e, 0x8b, 0x40, 0x1c, 0x8d,
 				0x04, 0x88, 0x8b, 0x04, 0x18, 0x03, 0xc3, 0x5b, 0x8b, 0xe5, 0x5d, 0xc2, 0x08, 0x00
 			};
-		return vector<char>(shellCode, &shellCode[sizeof(shellCode)]);
+		return std::vector<char>(shellCode, &shellCode[sizeof(shellCode)]);
 	}
 };

@@ -27,6 +27,9 @@
     <ClInclude Include="Injector.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="fileutils.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
