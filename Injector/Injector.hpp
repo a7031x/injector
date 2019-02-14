@@ -168,10 +168,10 @@ private:
 		char*& _shell;
 	public:
 		stack_frame_t(char*& shell) : _shell(shell) {
-			x64code(_shell, { 0x48, 0x83, 0xEC, 0x50 });
+			x64code(_shell, { 0x48, 0x83, 0xEC, 0x78 });
 		}
 		~stack_frame_t() {
-			x64code(_shell, { 0x48, 0x83, 0xC4, 0x50 });
+			x64code(_shell, { 0x48, 0x83, 0xC4, 0x78 });
 		}
 	};
 	static void x64code(char*& shellBase, unsigned char code)
