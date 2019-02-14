@@ -164,11 +164,25 @@ private:
 	{
 		x64code(shellBase, 0x2E);
 	}
+	class stack_frame_t {
+		char*& _shell;
+	public:
+		stack_frame_t(char*& shell) : _shell(shell) {
+			x64code(_shell, { 0x48, 0x83, 0xEC, 0x50 });
+		}
+		~stack_frame_t() {
+			x64code(_shell, { 0x48, 0x83, 0xC4, 0x50 });
+		}
+	};
 	static void x64code(char*& shellBase, unsigned char code)
 	{
 #ifdef _WIN64
 		*reinterpret_cast<unsigned char*>(shellBase++) = code;
 #endif // _WIN64
+	}
+	static void x64code(char*& shellBase, const std::vector<unsigned char>& data) {
+		for (unsigned char byte : data)
+			x64code(shellBase, byte);
 	}
 	static void writeShell(char* base, const Extention& ext, const std::string& monitorName)
 	{
@@ -230,6 +244,7 @@ private:
 		};
 		auto makeCallRelative = [&shellBase](uint32_t address)
 		{
+			stack_frame_t x(shellBase);
 			x64prefix(shellBase);
 			*reinterpret_cast<uint16_t*>(shellBase) = 0x9F8D;
 			*reinterpret_cast<uint32_t*>(shellBase + 2) = address;
@@ -240,12 +255,18 @@ private:
 		};
 		auto makeCallDirect = [&shellBase](size_t from, size_t address)
 		{
+			stack_frame_t x(shellBase);
 			*reinterpret_cast<unsigned char*>(shellBase++) = 0xE8;
+#ifdef _WIN64
+			from += 4;
+#endif // _WIN64
+
 			*reinterpret_cast<uint32_t*>(shellBase) = address - from - 5;
 			shellBase += 4;
 		};
 		auto makeCallEax = [&shellBase]()
 		{
+			stack_frame_t x(shellBase);
 			*reinterpret_cast<uint16_t*>(shellBase) = 0xD0FF;
 			shellBase += 2;
 		};
@@ -310,12 +331,18 @@ private:
 		x64code(shellBase, 0x5A);//pop rdx
 		makeCallDirect((size_t)shellBase + imageOffset, (size_t)procAddress + imageOffset);
 		//makePush((uint32_t)oldProtect + imageOffset);
-		unsigned char espToEsp[] = {0x83, 0xEC, 0x04, 0x89, 0x24, 0x24};
+		*shellBase++ = 0x53;
+		x64prefix(shellBase);
+		unsigned char espToEsp[] = {0x89, 0x24, 0x24};
 		memcpy(shellBase, espToEsp, sizeof(espToEsp));
 		shellBase += sizeof(espToEsp);
 		makePush(PAGE_READWRITE);
 		makePush(nt->OptionalHeader.SizeOfHeaders);
 		makePushRelative(nt->OptionalHeader.ImageBase);
+		x64code(shellBase, 0x59);//pop rcx
+		x64code(shellBase, 0x5A);//pop rdx
+		x64code(shellBase, { 0x41, 0x58 }); //pop r8
+		x64code(shellBase, { 0x41, 0x59 }); //pop r9
 		makeCallEax();
 		for(auto& rec : ext.recovery)
 		{
