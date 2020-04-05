@@ -18,5 +18,5 @@
 #pragma comment(lib, "shlwapi.lib")
 using namespace std;
 #include <NTSecAPI.h>
-
+#define DR_DO_NOT_DEFINE_byte
 // TODO: reference additional headers your program requires here

@@ -68,7 +68,7 @@
 #define	MIN_HOOK_SIZE	5
 #endif // _WIN64
 
-#include <DynamoRIO/dr_api.h>
+#include "DynamoRIO/include/dr_api.h"
 
 namespace hookapi
 {
