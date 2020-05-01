@@ -5,6 +5,7 @@
 #include <iostream>
 #include "Injector.hpp"
 #include <vector>
+#include <string>
 #include <Shlwapi.h>
 #pragma comment(lib, "shlwapi.lib")
 using namespace std;

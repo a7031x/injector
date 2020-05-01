@@ -137,7 +137,7 @@ private:
 		while(importDescriptor->TimeDateStamp || importDescriptor->FirstThunk || importDescriptor->Name || importDescriptor->OriginalFirstThunk || importDescriptor->ForwarderChain)
 		{
 			auto api_offset = importDescriptor->FirstThunk;
-			offset = (importDescriptor->OriginalFirstThunk ? importDescriptor->OriginalFirstThunk : api_offset) + virtualToRawOffset;
+			offset = (importDescriptor->OriginalFirstThunk ? importDescriptor->OriginalFirstThunk : api_offset) + virtualToRawOffset;//sometimes no need to add virtualToRawOffset
 			auto thunk = reinterpret_cast<IMAGE_THUNK_DATA*>(&base[offset]);
 			const size_t HIGHEST_MARK = size_t(1) << (sizeof(size_t) * 8 - 1);
 			while(0 != thunk->u1.AddressOfData)
