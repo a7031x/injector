@@ -88,10 +88,10 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 			auto base = reinterpret_cast<char*>(GetModuleHandleW(nullptr));
 			auto dosHeader = reinterpret_cast<IMAGE_DOS_HEADER*>(base);
 			auto ntHeader = reinterpret_cast<IMAGE_NT_HEADERS*>(base + dosHeader->e_lfanew);
-			hookapi::hook(SHGetFolderPathA, MyGetFolderPathA);
-			hookapi::hook(SHGetFolderPathW, MyGetFolderPathW);
-			hookapi::hook(SHGetSpecialFolderPathA, MyGetSpecialFolderPathA);
-			hookapi::hook(SHGetSpecialFolderPathW, MyGetSpecialFolderPathW);
+			//hookapi::hook(SHGetFolderPathA, MyGetFolderPathA);
+			//hookapi::hook(SHGetFolderPathW, MyGetFolderPathW);
+			//hookapi::hook(SHGetSpecialFolderPathA, MyGetSpecialFolderPathA);
+			//hookapi::hook(SHGetSpecialFolderPathW, MyGetSpecialFolderPathW);
 			DWORD oldProtection;
 			VirtualProtect(base + ntHeader->OptionalHeader.BaseOfCode,
 				ntHeader->OptionalHeader.SizeOfImage - ntHeader->OptionalHeader.BaseOfCode, PAGE_EXECUTE_READWRITE, &oldProtection);

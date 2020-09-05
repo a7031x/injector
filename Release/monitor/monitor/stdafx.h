@@ -19,6 +19,7 @@
 #include <string>
 #include <set>
 #include <mutex>
+#include "utils.hpp"
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "shlwapi.lib")
 
