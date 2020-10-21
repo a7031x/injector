@@ -72,6 +72,14 @@ BOOL WINAPI MyGetSpecialFolderPathW(__reserved HWND hwnd, __out_ecount(MAX_PATH)
 	return TRUE;
 }
 
+HRESULT WINAPI MyGetKnownFolderPath(_In_ REFKNOWNFOLDERID rfid, _In_ DWORD dwFlags, _In_opt_ HANDLE hToken, _Outptr_ PWSTR* ppszPath)
+{
+	*ppszPath = (PWSTR)CoTaskMemAlloc(MAX_PATH * sizeof(wchar_t));
+	GetModuleFileNameW(nullptr, *ppszPath, MAX_PATH);
+	PathRemoveFileSpecW(*ppszPath);
+	return TRUE;
+}
+
 BOOL APIENTRY DllMain( HMODULE hModule,
                        DWORD  ul_reason_for_call,
                        LPVOID lpReserved
@@ -80,7 +88,7 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 	switch (ul_reason_for_call)
 	{
 	case DLL_PROCESS_ATTACH:
-		bypassSelfVerification();
+		//bypassSelfVerification();
 		{
 			wchar_t path[MAX_PATH];
 			GetModuleFileNameW(nullptr, path, _countof(path));
@@ -88,10 +96,12 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 			auto base = reinterpret_cast<char*>(GetModuleHandleW(nullptr));
 			auto dosHeader = reinterpret_cast<IMAGE_DOS_HEADER*>(base);
 			auto ntHeader = reinterpret_cast<IMAGE_NT_HEADERS*>(base + dosHeader->e_lfanew);
-			//hookapi::hook(SHGetFolderPathA, MyGetFolderPathA);
-			//hookapi::hook(SHGetFolderPathW, MyGetFolderPathW);
-			//hookapi::hook(SHGetSpecialFolderPathA, MyGetSpecialFolderPathA);
-			//hookapi::hook(SHGetSpecialFolderPathW, MyGetSpecialFolderPathW);
+			hookapi::hook(SHGetFolderPathA, MyGetFolderPathA);
+			hookapi::hook(SHGetFolderPathW, MyGetFolderPathW);
+			hookapi::hook(SHGetSpecialFolderPathA, MyGetSpecialFolderPathA);
+			hookapi::hook(SHGetSpecialFolderPathW, MyGetSpecialFolderPathW);
+			auto SHGetKnownFolderPath = GetProcAddress(GetModuleHandleA("shell32.dll"), "SHGetKnownFolderPath");
+			hookapi::hook_unsafe(SHGetKnownFolderPath, MyGetKnownFolderPath);
 			DWORD oldProtection;
 			VirtualProtect(base + ntHeader->OptionalHeader.BaseOfCode,
 				ntHeader->OptionalHeader.SizeOfImage - ntHeader->OptionalHeader.BaseOfCode, PAGE_EXECUTE_READWRITE, &oldProtection);
