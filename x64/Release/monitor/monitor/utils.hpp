@@ -1,12 +1,14 @@
 #pragma once
 #include "DynamoRIO/include/dr_api.h"
 
-inline void patch_bytes(size_t address, const std::vector<unsigned char>& bytes) {
+template<typename T>
+inline void patch_bytes(T address, const std::vector<unsigned char>& bytes) {
 	auto base = reinterpret_cast<unsigned char*>(address);
 	std::copy(bytes.begin(), bytes.end(), base);
 }
 
-inline void patch_nops(size_t address, size_t nops) {
+template<typename T>
+inline void patch_nops(T address, size_t nops) {
 	std::vector<unsigned char> bytes(nops, 0x90);
 	patch_bytes(address, bytes);
 }
@@ -15,7 +17,7 @@ inline size_t detect_boundary_size(size_t address, size_t size) {
 	size_t offset = 0;
 	auto base = (unsigned char*)address;
 	while (true) {
-		offset += decode_sizeof(nullptr, &base[offset], nullptr);
+		offset += decode_sizeof(nullptr, &base[offset], nullptr, nullptr);
 		if (offset >= size)
 			return offset;
 	}
