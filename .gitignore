@@ -12,3 +12,6 @@ Injector/Debug
 *.idb
 *.suo
 Debug
+Injector/x64/Release/Injector.exe.recipe
+*.lib
+
