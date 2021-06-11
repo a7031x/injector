@@ -7,6 +7,7 @@
 #include <vector>
 #include <string>
 #include <Shlwapi.h>
+#include <filesystem>
 #pragma comment(lib, "shlwapi.lib")
 using namespace std;
 
@@ -25,15 +26,16 @@ void copy_folder(const std::filesystem::path& source, const std::filesystem::pat
 
 int _tmain(int argc, _TCHAR* argv[])
 {
-	string sfileName;
-	getline(cin, sfileName);
-	sfileName.erase(std::remove(sfileName.begin(), sfileName.end(), '\"'), sfileName.end());
-	Injector::inject(sfileName, "monitor.dll");
-	wchar_t monitorFolder[MAX_PATH];
-	GetModuleFileNameW(nullptr, monitorFolder, _countof(monitorFolder));
-	PathRemoveFileSpecW(monitorFolder);
-	PathCombineW(monitorFolder, monitorFolder, L"monitor");
-	copy_folder(monitorFolder, std::filesystem::path(sfileName).parent_path() / std::filesystem::path("monitor"));
+	string filepath;
+	getline(cin, filepath);
+	filepath.erase(std::remove(filepath.begin(), filepath.end(), '\"'), filepath.end());
+	Injector::inject(filepath, "monitor.dll");
+	auto targetfolder = std::filesystem::path(filepath).parent_path();
+	std::filesystem::copy_file("dynamorio.dll", targetfolder / "dynamorio.dll");
+	//wchar_t monitorFolder[MAX_PATH];
+	//GetModuleFileNameW(nullptr, monitorFolder, _countof(monitorFolder));
+	//PathRemoveFileSpecW(monitorFolder);
+	//PathCombineW(monitorFolder, monitorFolder, L"monitor");
+	//copy_folder(monitorFolder, std::filesystem::path(filepath).parent_path() / std::filesystem::path("monitor"));
 	return 0;
 }
-
